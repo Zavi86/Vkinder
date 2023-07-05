@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import vk_api
+import json
 
 from config import access_token
 
@@ -30,7 +31,7 @@ class VkTools:
         res = self.api.method('database.getCities', {'q': city})
         return res['items'][0]['id']
 
-    def search_users(self, params, offset=0):
+    def search_users(self, params, user_id, offset=0):
         sex = 1 if params['sex'] == 2 else 2
         city = params['city']
         curent_year = datetime.now().year
@@ -40,7 +41,7 @@ class VkTools:
         age_to = age + 5
 
         users = self.api.method('users.search',
-                                {'count': 1000,
+                                {'count': 5,
                                  'offset': offset,
                                  'age_from': age_from,
                                  'age_to': age_to,
@@ -65,6 +66,15 @@ class VkTools:
                             'name': user['first_name'] + ' ' + user['last_name']
                             }
                            )
+
+        with open('search_lists.json', 'r') as e:
+            a = e.read()
+        data = json.loads(a)
+        data[user_id] = res
+        to_json = json.dumps(data)
+        with open('search_lists.json', 'w') as f:
+            f.write(to_json)
+
         return res
 
     def get_photos(self, user_id):
