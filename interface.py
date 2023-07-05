@@ -6,7 +6,6 @@ from config import community_token, access_token
 from core import VkTools
 
 import database
-import json
 
 
 class BotInterface:
@@ -27,23 +26,6 @@ class BotInterface:
                                'random_id': get_random_id()
                                }
                               )
-
-    @staticmethod
-    def select_from_json(user_id):
-        with open('search_lists.json', 'r') as e:
-            a = e.read()
-        data = json.loads(a)
-        return data[str(user_id)]
-
-    @staticmethod
-    def update_json(user_id, params):
-        with open('search_lists.json', 'r') as e:
-            a = e.read()
-        data = json.loads(a)
-        data[str(user_id)] = params
-        to_json = json.dumps(data)
-        with open('search_lists.json', 'w') as f:
-            f.write(to_json)
 
     @staticmethod
     def get_key(params, none_value):
@@ -85,27 +67,23 @@ class BotInterface:
                             self.params['relation'] = event.text
                             self.info_user_check(self.params, longpoll)
         else:
-            self.search(longpoll, self.user_id)
+            self.search(longpoll)
 
-    def search(self, longpoll, user_id):
-        data = self.select_from_json(user_id)
+    def search(self, longpoll):
+        if self.result is None:
+            self.result = self.api.search_users(self.params)
+            self.send_result_to_user(self.result, longpoll)
 
-        if data is None:
-            self.result = self.api.search_users(self.params, self.user_id)
-            self.send_result_to_user(self.result, longpoll, self.user_id)
-
-        elif data == []:
+        elif self.result == []:
             self.offset += 50
-            self.result = self.api.search_users(self.params, self.user_id, offset=self.offset)
-            self.send_result_to_user(self.result, longpoll, self.user_id)
+            self.result = self.api.search_users(self.params, offset=self.offset)
+            self.send_result_to_user(self.result, longpoll)
 
         else:
-            self.result = data
-            self.send_result_to_user(self.result, longpoll, self.user_id)
+            self.send_result_to_user(self.result, longpoll)
 
-    def send_result_to_user(self, users, longpoll, user_id):
+    def send_result_to_user(self, users, longpoll):
         user = users.pop()
-        self.update_json(user_id, users)
         check = database.check_user(user['id'], self.user_id)
         if check is None:
             photos_user = self.api.get_photos(user['id'])
@@ -126,12 +104,12 @@ class BotInterface:
                 if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                     command = event.text.lower()
                     if command == 'дальше':
-                        self.search(longpoll, self.user_id)
+                        self.search(longpoll)
                     elif command == 'стоп':
                         self.message_send(event.user_id, f'Поиск остановлен, жду дальнейших команд')
                         self.event_handler()
         else:
-            self.search(longpoll, self.user_id)
+            self.search(longpoll)
 
     def event_handler(self):
         longpoll = VkLongPoll(self.interface)
@@ -143,14 +121,6 @@ class BotInterface:
                 if command == 'привет':
                     self.user_id = event.user_id
                     self.params = self.api.get_profile_info(event.user_id)
-                    with open('search_lists.json', 'r') as e:
-                        a = e.read()
-                    data = json.loads(a)
-                    if str(self.user_id) not in data:
-                        data[self.user_id] = None
-                        to_json = json.dumps(data)
-                        with open('search_lists.json', 'w') as f:
-                            f.write(to_json)
                     self.message_send(event.user_id, f'''Привет, {self.params["name"]}
 
 Я - Vkinder! Помогу тебе найти свою вторую половинку! Для того, чтобы начать, просто напиши мне слово "поиск"!''')
@@ -160,6 +130,7 @@ class BotInterface:
 
                 elif command == 'пока':
                     self.message_send(event.user_id, 'Что ж, пока...')
+
                 else:
                     self.message_send(event.user_id, 'Команда не найдена, я такое не понимаю')
 
